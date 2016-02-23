@@ -57,6 +57,7 @@
     <Reference Include="System.Net.Http.WebRequest" />
     <Reference Include="System.Reflection" />
     <Reference Include="System.Resources.ResourceManager" />
+    <Reference Include="System.Runtime.Caching" />
     <Reference Include="System.Runtime.Serialization" />
     <Reference Include="System.Security" />
     <Reference Include="System.Threading" />
@@ -116,6 +117,7 @@
     <Compile Include="Converters\StyleKeyConverter.cs" />
     <Compile Include="Converters\SummaryToFontStyleConverter.cs" />
     <Compile Include="Converters\SummaryToStringConverter.cs" />
+    <Compile Include="Converters\IconUrlToImageCacheConverter.cs" />
     <Compile Include="Converters\VersionToStringConverter.cs" />
     <Compile Include="Feeds\IAutoCompleteProvider.cs" />
     <Compile Include="Feeds\MultiSourceAutoCompleteProvider.cs" />
@@ -152,6 +154,8 @@
       <DesignTime>True</DesignTime>
       <DependentUpon>Resources.resx</DependentUpon>
     </Compile>
+    <Compile Include="Resources\Images.cs" />
+    <Compile Include="Resources\ResourceKeys.cs" />
     <Compile Include="Resources\Styles.cs" />
     <Compile Include="Feeds\UpdatePackageFeed.cs" />
     <Compile Include="UserInterfaceService\INuGetUI.cs" />

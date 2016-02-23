@@ -9,8 +9,10 @@ using System.Linq;
 using System.Threading.Tasks;
 using NuGet.Common;
 using NuGet.Packaging.Core;
+using System.Windows.Media.Imaging;
 using NuGet.Protocol.Core.Types;
 using NuGet.Versioning;
+
 
 namespace NuGet.PackageManagement.UI
 {
