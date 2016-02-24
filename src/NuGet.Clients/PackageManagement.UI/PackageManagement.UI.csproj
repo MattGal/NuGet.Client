@@ -76,6 +76,7 @@
     <Compile Include="Actions\UIActionEngine.cs" />
     <Compile Include="Actions\ProjectContext.cs" />
     <Compile Include="Actions\UpdatePreviewResult.cs" />
+    <Compile Include="Common\ErrorFloodGate.cs" />
     <Compile Include="Common\IOptionsPageActivator.cs" />
     <Compile Include="Common\NuGetEvent.cs" />
     <Compile Include="Common\NuGetEventTrigger.cs" />
@@ -155,7 +156,6 @@
       <DependentUpon>Resources.resx</DependentUpon>
     </Compile>
     <Compile Include="Resources\Images.cs" />
-    <Compile Include="Resources\ResourceKeys.cs" />
     <Compile Include="Resources\Styles.cs" />
     <Compile Include="Feeds\UpdatePackageFeed.cs" />
     <Compile Include="UserInterfaceService\INuGetUI.cs" />

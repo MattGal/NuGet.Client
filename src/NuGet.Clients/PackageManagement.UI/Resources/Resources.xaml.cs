@@ -1,8 +1,9 @@
 ﻿using System.Windows;
+using System.Windows.Controls;
 
 namespace NuGet.PackageManagement.UI
 {
-    public partial class SharedResources : ResourceDictionary
+    internal partial class SharedResources : ResourceDictionary
     {
         public SharedResources()
         {

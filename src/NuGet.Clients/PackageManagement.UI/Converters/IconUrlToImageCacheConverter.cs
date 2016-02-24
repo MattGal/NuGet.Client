@@ -13,7 +13,7 @@ namespace NuGet.PackageManagement.UI
         // same URIs can reuse the bitmapImage that we've already used.
         private static readonly ObjectCache _bitmapImageCache = System.Runtime.Caching.MemoryCache.Default;
 
-        private readonly WebExceptionStatus[] FatalErrors = new[]
+        private static readonly WebExceptionStatus[] FatalErrors = new[]
         {
             WebExceptionStatus.ConnectFailure,
             WebExceptionStatus.RequestCanceled,
@@ -22,14 +22,9 @@ namespace NuGet.PackageManagement.UI
             WebExceptionStatus.UnknownError
         };
 
-        // If we fail at least this high (failures/attempts), we'll shut off image loads.
-        // TODO: Should we allow this to be overridden in nuget.config.
-        private const double StopLoadingImageThreshold = 0.50;
-
         private static readonly System.Net.Cache.RequestCachePolicy RequestCacheIfAvailable = new System.Net.Cache.RequestCachePolicy(System.Net.Cache.RequestCacheLevel.CacheIfAvailable);
 
-        private static long _iconLoadAttempts = 0;
-        private static int _iconFatalFailures = 0;
+        private static readonly ErrorFloodGate _errorFloodGate = new ErrorFloodGate();
 
         // We bind to a BitmapImage instead of a Uri so that we can control the decode size, since we are displaying 32x32 images, while many of the images are 128x128 or larger.
         // This leads to a memory savings.
@@ -50,7 +45,7 @@ namespace NuGet.PackageManagement.UI
 
             // Some people run on networks with internal NuGet feeds, but no access to the package images on the internet.
             // This is meant to detect that kind of case, and stop spamming the network, so the app remains responsive.
-            if (_iconFatalFailures > 5 && ((double)_iconFatalFailures / _iconLoadAttempts) > StopLoadingImageThreshold)
+            if (_errorFloodGate.IsOpen)
             {
                 return null;
             }
@@ -87,16 +82,7 @@ namespace NuGet.PackageManagement.UI
                 // store this bitmapImage in the bitmap image cache, so that other occurances can reuse the BitmapImage
                 AddToCache(iconUrl, iconBitmapImage);
 
-                // if we hit maxValue, reset both failures and loadattempts.
-                if (int.MaxValue > _iconLoadAttempts)
-                {
-                    _iconLoadAttempts++;
-                }
-                else
-                {
-                    _iconLoadAttempts = 0;
-                    _iconFatalFailures = 0;
-                }
+                _errorFloodGate.ReportAttempt();
             }
 
             return iconBitmapImage;
@@ -106,9 +92,15 @@ namespace NuGet.PackageManagement.UI
         {
             var policy = new CacheItemPolicy
             {
-                AbsoluteExpiration = DateTimeOffset.Now.AddMinutes(10)
+                SlidingExpiration = TimeSpan.FromMinutes(10),
+                RemovedCallback = CacheEntryRemoved
             };
             _bitmapImageCache.Set(iconUrl.ToString(), iconBitmapImage, policy);
+        }
+
+        private static void CacheEntryRemoved(CacheEntryRemovedArguments arguments)
+        {
+
         }
 
         public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture)
@@ -138,7 +130,7 @@ namespace NuGet.PackageManagement.UI
                 var webex = e.ErrorException as WebException;
                 if (webex != null && FatalErrors.Any(c => webex.Status == c))
                 {
-                    _iconFatalFailures++;
+                    _errorFloodGate.ReportError();
                 }
             }
         }
