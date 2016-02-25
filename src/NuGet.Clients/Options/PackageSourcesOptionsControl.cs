@@ -227,15 +227,12 @@ namespace NuGet.Options
                     _packageSourceProvider.SavePackageSources(packageSources);
                 }
             }
-            catch (InvalidOperationException)
+            catch (Configuration.NuGetConfigurationException e)
             {
-                MessageHelper.ShowErrorMessage(Resources.ShowError_ConfigInvalidOperation, Resources.ErrorDialogBoxTitle);
+                MessageHelper.ShowErrorMessage(e.Message, Resources.ErrorDialogBoxTitle);
                 return false;
             }
-            catch (UnauthorizedAccessException)
-            {
-                MessageHelper.ShowErrorMessage(Resources.ShowError_ConfigUnauthorizedAccess, Resources.ErrorDialogBoxTitle);
-            }
+
             // find the enabled package source 
             return true;
         }

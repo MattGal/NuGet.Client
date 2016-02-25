@@ -1068,13 +1068,25 @@ namespace NuGet.Configuration
                 catch(InvalidOperationException e)
                 {
                     throw new NuGetConfigurationException(
-                        string.Format(Resources.ShowError_ConfigInvalidOperation, fileName), e);
+                        string.Format(Resources.ShowError_ConfigInvalidOperation, fileName, e.Message), e);
                 }
 
                 catch (UnauthorizedAccessException e)
                 {
                     throw new NuGetConfigurationException(
-                        string.Format(Resources.ShowError_ConfigUnauthorizedAccess, fileName), e);
+                        string.Format(Resources.ShowError_ConfigUnauthorizedAccess, fileName, e.Message), e);
+                }
+
+                catch (XmlException e)
+                {
+                    throw new NuGetConfigurationException(
+                        string.Format(Resources.ShowError_ConfigInvalidXml, fileName, e.Message), e);
+                }
+
+                catch (Exception e)
+                {
+                    throw new NuGetConfigurationException(
+                        string.Format(Resources.ShowError_ConfigInvalidXml, fileName, e.Message), e);
                 }
 
                 finally

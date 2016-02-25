@@ -152,6 +152,22 @@ namespace NuGet.Configuration
             }
         }
 
+        public static string ShowError_ConfigInvalidXml
+        {
+            get
+            {
+                return GetString("ShowError_ConfigInvalidXml");
+            }
+        }
+
+        public static string Unknown_Config_Exception
+        {
+            get
+            {
+                return GetString("Unknown_Config_Exception");
+            }
+        }
+
         /// <summary>
         /// Unable to parse config file '{0}'.
         /// </summary>
