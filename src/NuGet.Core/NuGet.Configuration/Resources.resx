@@ -135,6 +135,12 @@
   <data name="Settings_FileName_Cannot_Be_A_Path" xml:space="preserve">
     <value>Parameter 'fileName' to Settings must be just a fileName and not a path</value>
   </data>
+  <data name="ShowError_ConfigInvalidOperation" xml:space="preserve">
+    <value>NuGet.Config is malformed, Please check NuGet.Config at '{0}'.</value>
+  </data>
+  <data name="ShowError_ConfigUnauthorizedAccess" xml:space="preserve">
+    <value>Can not access NuGet.Config, Please check NuGet.Config at '{0}'.</value>
+  </data>
   <data name="UnsupportedHashAlgorithm" xml:space="preserve">
     <value>Hash algorithm '{0}' is unsupported. Supported algorithms include: SHA512 and SHA256.</value>
   </data>

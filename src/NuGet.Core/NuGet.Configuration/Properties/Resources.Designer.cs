@@ -131,6 +131,28 @@ namespace NuGet.Configuration
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to NuGet.Config is malformed, Please check NuGet.Config.
+        /// </summary>
+        public static string ShowError_ConfigInvalidOperation
+        {
+            get
+            {
+                return GetString("ShowError_ConfigInvalidOperation");
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Can not access NuGet.Config, Please check NuGet.Config.
+        /// </summary>
+        public static string ShowError_ConfigUnauthorizedAccess
+        {
+            get
+            {
+                return GetString("ShowError_ConfigUnauthorizedAccess");
+            }
+        }
+
+        /// <summary>
         /// Unable to parse config file '{0}'.
         /// </summary>
         internal static string FormatUserSettings_UnableToParseConfigFile(object p0)

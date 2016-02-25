@@ -1065,6 +1065,18 @@ namespace NuGet.Configuration
                     // back than hang
                     ioOperation();
                 }
+                catch(InvalidOperationException e)
+                {
+                    throw new NuGetConfigurationException(
+                        string.Format(Resources.ShowError_ConfigInvalidOperation, fileName), e);
+                }
+
+                catch (UnauthorizedAccessException e)
+                {
+                    throw new NuGetConfigurationException(
+                        string.Format(Resources.ShowError_ConfigUnauthorizedAccess, fileName), e);
+                }
+
                 finally
                 {
                     if (owner)
