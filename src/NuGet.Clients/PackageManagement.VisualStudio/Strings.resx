@@ -196,6 +196,6 @@
     <value>Failed to update binding redirects for {0} : {1}</value>
   </data>
   <data name="ConfigErrorDialogBoxTitle" xml:space="preserve">
-    <value>Configuration operation failed</value>
+    <value>Operation failed</value>
   </data>
 </root>

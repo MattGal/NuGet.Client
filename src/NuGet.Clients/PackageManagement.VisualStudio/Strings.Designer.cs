@@ -70,7 +70,7 @@ namespace NuGet.PackageManagement.VisualStudio {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Configuration operation failed.
+        ///   Looks up a localized string similar to Operation failed.
         /// </summary>
         public static string ConfigErrorDialogBoxTitle {
             get {

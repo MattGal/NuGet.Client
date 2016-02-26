@@ -54,7 +54,7 @@ namespace NuGet.PackageManagement.VisualStudio
             {
                 SolutionSettings = Configuration.Settings.LoadDefaultSettings(root, configFileName: null, machineWideSettings: MachineWideSettings);
             }
-            catch(Configuration.NuGetConfigurationException ex)
+            catch (Configuration.NuGetConfigurationException ex)
             {
                 MessageHelper.ShowErrorMessage(ex.Message, Strings.ConfigErrorDialogBoxTitle);
             }

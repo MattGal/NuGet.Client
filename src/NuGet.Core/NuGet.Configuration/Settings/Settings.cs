@@ -78,6 +78,7 @@ namespace NuGet.Configuration
             ExecuteSynchronized(() => config = XmlUtility.GetOrCreateDocument(CreateDefaultConfig(), ConfigFilePath));
             ConfigXDocument = config;
             IsMachineWideSettings = isMachineWideSettings;
+            CheckConfigRoot();
         }
 
         public event EventHandler SettingsChanged = delegate { };
@@ -156,7 +157,7 @@ namespace NuGet.Configuration
                 configFileName,
                 machineWideSettings,
                 loadAppDataSettings: true,
-                useTestingGlobalPath : false);
+                useTestingGlobalPath: false);
         }
 
         /// <summary>
@@ -267,7 +268,7 @@ namespace NuGet.Configuration
                         foreach (var value in values)
                         {
                             var packageSource = new PackageSource(value.Value);
-                            
+
                             // if the machine wide package source is http source, disable it by default
                             if (packageSource.IsHttp)
                             {
@@ -390,7 +391,7 @@ namespace NuGet.Configuration
         private string ApplyEnvironmentTransform(string configValue)
         {
             if (string.IsNullOrEmpty(configValue))
-            { 
+            {
                 return configValue;
             }
 
@@ -1065,7 +1066,7 @@ namespace NuGet.Configuration
                     // back than hang
                     ioOperation();
                 }
-                catch(InvalidOperationException e)
+                catch (InvalidOperationException e)
                 {
                     throw new NuGetConfigurationException(
                         string.Format(Resources.ShowError_ConfigInvalidOperation, fileName, e.Message), e);
@@ -1086,7 +1087,7 @@ namespace NuGet.Configuration
                 catch (Exception e)
                 {
                     throw new NuGetConfigurationException(
-                        string.Format(Resources.ShowError_ConfigInvalidXml, fileName, e.Message), e);
+                        string.Format(Resources.Unknown_Config_Exception, fileName, e.Message), e);
                 }
 
                 finally
@@ -1103,10 +1104,20 @@ namespace NuGet.Configuration
         {
             return new XDocument(new XElement("configuration",
                                  new XElement(ConfigurationConstants.PackageSources,
-                                 new XElement("add", 
+                                 new XElement("add",
                                  new XAttribute(ConfigurationConstants.KeyAttribute, NuGetConstants.FeedName),
                                  new XAttribute(ConfigurationConstants.ValueAttribute, NuGetConstants.V3FeedUrl),
                                  new XAttribute(ConfigurationConstants.ProtocolVersionAttribute, "3")))));
+        }
+
+        // this method will check NuGet.Config file, if the root is not configuration, it will throw.
+        private void CheckConfigRoot()
+        {
+            if (ConfigXDocument.Root.Name != "configuration")
+            {
+                throw new NuGetConfigurationException(
+                         string.Format(Resources.ShowError_ConfigRootInvalid, ConfigFilePath));
+            }
         }
     }
 }

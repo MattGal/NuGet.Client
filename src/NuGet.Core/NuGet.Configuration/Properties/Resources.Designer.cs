@@ -168,6 +168,14 @@ namespace NuGet.Configuration
             }
         }
 
+        public static string ShowError_ConfigRootInvalid
+        {
+            get
+            {
+                return GetString("ShowError_ConfigRootInvalid");
+            }
+        }
+
         /// <summary>
         /// Unable to parse config file '{0}'.
         /// </summary>

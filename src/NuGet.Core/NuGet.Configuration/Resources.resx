@@ -141,6 +141,9 @@
   <data name="ShowError_ConfigInvalidXml" xml:space="preserve">
     <value>NuGet.Config is invalid XML, Please check NuGet.Config at '{0}', exception message is '{1}'.</value>
   </data>
+  <data name="ShowError_ConfigRootInvalid" xml:space="preserve">
+    <value>NuGet.Config is invalid, the root element is not 'configuration'. Please check NuGet.Config at '{0}'.</value>
+  </data>
   <data name="ShowError_ConfigUnauthorizedAccess" xml:space="preserve">
     <value>Can not access NuGet.Config, Please check NuGet.Config at '{0}', exception message is '{1}'.</value>
   </data>
