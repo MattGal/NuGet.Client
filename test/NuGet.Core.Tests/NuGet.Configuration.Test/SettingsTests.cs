@@ -2252,7 +2252,7 @@ namespace NuGet.Configuration.Test
 
                 // Assert
                 var path = Path.Combine(mockBaseDirectory, nugetConfigPath);
-                Assert.Equal($"NuGet.Config is invalid XML, Please check NuGet.Config at '{path}', exception message is 'Data at the root level is invalid. Line 1, position 1.'.", ex.Message);
+                Assert.Equal($"NuGet.Config is invalid XML, Please check NuGet.Config at '{path}'.", ex.Message);
             }
         }
 

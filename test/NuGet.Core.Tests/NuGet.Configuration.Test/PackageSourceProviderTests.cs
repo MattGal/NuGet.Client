@@ -2272,7 +2272,7 @@ namespace NuGet.Configuration.Test
 
                 // Assert
                 var path = Path.Combine(mockBaseDirectory, "NuGet.Config");
-                Assert.Equal($"Can not access NuGet.Config, Please check NuGet.Config at '{path}', exception message is 'Access to the path '{path}' is denied.'.", ex.Message);
+                Assert.Equal($"Can not access NuGet.Config, Please check NuGet.Config at '{path}'.", ex.Message);
             }
         }
 

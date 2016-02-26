@@ -5,6 +5,7 @@ using System;
 using System.Collections.Generic;
 using System.ComponentModel.Composition;
 using System.IO;
+using NuGet.Common;
 
 namespace NuGet.PackageManagement.VisualStudio
 {
@@ -56,7 +57,7 @@ namespace NuGet.PackageManagement.VisualStudio
             }
             catch (Configuration.NuGetConfigurationException ex)
             {
-                MessageHelper.ShowErrorMessage(ex.Message, Strings.ConfigErrorDialogBoxTitle);
+                MessageHelper.ShowErrorMessage(ExceptionUtilities.DisplayMessage(ex), Strings.ConfigErrorDialogBoxTitle);
             }
         }
 
