@@ -2236,6 +2236,49 @@ namespace NuGet.Configuration.Test
             }
         }
 
+        [Fact]
+        public void LoadNuGetConfig_InvalidXmlThrowException()
+        {
+            // Arrange
+            var config = @"boo>";
+
+            var nugetConfigPath = "NuGet.Config";
+            using (var mockBaseDirectory = TestFileSystemUtility.CreateRandomTestFolder())
+            {
+                ConfigurationFileTestUtility.CreateConfigurationFile(nugetConfigPath, mockBaseDirectory, config);
+
+                // Act
+                var ex = Assert.Throws<NuGetConfigurationException>(() => new Settings(mockBaseDirectory));
+
+                // Assert
+                var path = Path.Combine(mockBaseDirectory, nugetConfigPath);
+                Assert.Equal($"NuGet.Config is invalid XML, Please check NuGet.Config at '{path}', exception message is 'Data at the root level is invalid. Line 1, position 1.'.", ex.Message);
+            }
+        }
+
+        [Fact]
+        public void LoadNuGetConfig_InvalidRootThrowException()
+        {
+            // Arrange
+            var config = @"<?xml version=""1.0"" encoding=""utf-8""?>
+<packageSources>
+    <add key=""nuget.org"" value=""https://api.nuget.org/v3/index.json"" protocolVersion=""3"" />
+  </packageSources>";
+
+            var nugetConfigPath = "NuGet.Config";
+            using (var mockBaseDirectory = TestFileSystemUtility.CreateRandomTestFolder())
+            {
+                ConfigurationFileTestUtility.CreateConfigurationFile(nugetConfigPath, mockBaseDirectory, config);
+
+                // Act
+                var ex = Assert.Throws<NuGetConfigurationException>(() => new Settings(mockBaseDirectory));
+
+                // Assert
+                var path = Path.Combine(mockBaseDirectory, nugetConfigPath);
+                Assert.Equal($"NuGet.Config is invalid, the root element is not 'configuration'. Please check NuGet.Config at '{path}'.", ex.Message);
+            }
+        }
+
         private void AssertEqualCollections(IList<SettingValue> actual, string[] expected)
         {
             Assert.Equal(actual.Count, expected.Length / 2);

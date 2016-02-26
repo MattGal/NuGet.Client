@@ -2240,6 +2240,42 @@ namespace NuGet.Configuration.Test
             }
         }
 
+        [Fact]
+        public void SavePackageSources_ThrowWhenConfigReadOnly()
+        {
+            using (var mockBaseDirectory = TestFileSystemUtility.CreateRandomTestFolder())
+            {
+                // Arrange
+                var configContents =
+                     @"<?xml version=""1.0"" encoding=""utf-8""?>
+<configuration>
+    <packageSources>
+      <clear />
+      <add key=""test"" value=""https://nuget/test"" />
+    </packageSources>
+</configuration>
+";
+                File.WriteAllText(Path.Combine(mockBaseDirectory.Path, "NuGet.Config"), configContents);
+                File.SetAttributes(Path.Combine(mockBaseDirectory.Path, "NuGet.Config"), FileAttributes.ReadOnly);
+                var settings = Settings.LoadDefaultSettings(mockBaseDirectory.Path,
+                                  configFileName: null,
+                                  machineWideSettings: null,
+                                  loadAppDataSettings: true,
+                                  useTestingGlobalPath: true);
+                var packageSourceProvider = new PackageSourceProvider(settings);
+
+                // Act
+                var sources = packageSourceProvider.LoadPackageSources().ToList();
+                sources.Add(new PackageSource("https://test3.net", "test3"));
+
+                var ex = Assert.Throws<NuGetConfigurationException>(() => packageSourceProvider.SavePackageSources(sources));
+
+                // Assert
+                var path = Path.Combine(mockBaseDirectory, "NuGet.Config");
+                Assert.Equal($"Can not access NuGet.Config, Please check NuGet.Config at '{path}', exception message is 'Access to the path '{path}' is denied.'.", ex.Message);
+            }
+        }
+
         private string CreateNuGetConfigContent(string enabledReplacement = "", string disabledReplacement = "", string activeSourceReplacement = "")
         {
             var nugetConfigBaseString = new StringBuilder();
