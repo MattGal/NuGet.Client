@@ -11,6 +11,7 @@ $ILMerge = Join-Path $NuGetClientRoot 'packages\ILMerge.2.14.1208\tools\ILMerge.
 $DotNetExe = Join-Path $NuGetClientRoot 'cli\bin\dotnet.exe'
 $Nupkgs = Join-Path $NuGetClientRoot nupkgs
 $Artifacts = Join-Path $NuGetClientRoot artifacts
+$Intermediate = Join-Path $Artifacts obj
 $NuGetCoreSln = Join-Path $NuGetClientRoot 'NuGet.Core.sln'
 $NuGetClientSln = Join-Path $NuGetClientRoot 'NuGet.Client.sln'
 
@@ -240,7 +241,7 @@ Function Restore-SolutionPackages{
 # Restore nuget.core.sln projects
 Function Restore-XProjects {
 
-    $opts = 'restore', $NuGetCoreSln
+    $opts = 'restore', $NuGetCoreSln, '-Verbosity', 'quiet'
 
     Trace-Log "Restoring packages for @""$NuGetCoreSln"""
     Verbose-Log "nuget.exe $opts"
@@ -273,9 +274,9 @@ Function Invoke-DotnetPack {
         $BuildNumber = Format-BuildNumber $BuildNumber
 
         ## Setting the Dotnet build version
-        if($ReleaseLabel -ne 'Release') {
-            $env:DOTNET_BUILD_VERSION="${ReleaseLabel}-${BuildNumber}"
-        }
+        # if($ReleaseLabel -ne 'Release') {
+        #    $env:DOTNET_BUILD_VERSION=$versionSuffix
+        # }
 
         # Setting the Dotnet AssemblyFileVersion
         $env:DOTNET_ASSEMBLY_FILE_VERSION=$BuildNumber
@@ -285,11 +286,19 @@ Function Invoke-DotnetPack {
             $opts = , 'pack'
             $opts += $_
             $opts += '--configuration', $Configuration
+
             if ($Output) {
                 $opts += '--output', (Join-Path $Output (Split-Path $_ -Leaf))
             }
 
-            Verbose-Log "$DotNetExe $opts"
+            if($ReleaseLabel -ne 'Release') {
+                $opts += '--version-suffix', "${ReleaseLabel}-${BuildNumber}"
+            }
+
+            Trace-Log "====================================="
+            Trace-Log "$DotNetExe $opts"
+            Trace-Log "====================================="
+
             &$DotNetExe $opts 2>&1
             if (-not $?) {
                 Error-Log "Pack failed @""$_"". Code: $LASTEXITCODE"
