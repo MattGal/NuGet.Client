@@ -1030,6 +1030,29 @@ namespace NuGet.Configuration
                     owner = _globalMutex.WaitOne(TimeSpan.FromMinutes(1));
                     ioOperation();
                 }
+                catch (InvalidOperationException e)
+                {
+                    throw new NuGetConfigurationException(
+                        string.Format(Resources.ShowError_ConfigInvalidOperation, ConfigFilePath, e.Message), e);
+                }
+
+                catch (UnauthorizedAccessException e)
+                {
+                    throw new NuGetConfigurationException(
+                        string.Format(Resources.ShowError_ConfigUnauthorizedAccess, ConfigFilePath, e.Message), e);
+                }
+
+                catch (XmlException e)
+                {
+                    throw new NuGetConfigurationException(
+                        string.Format(Resources.ShowError_ConfigInvalidXml, ConfigFilePath, e.Message), e);
+                }
+
+                catch (Exception e)
+                {
+                    throw new NuGetConfigurationException(
+                        string.Format(Resources.Unknown_Config_Exception, ConfigFilePath, e.Message), e);
+                }
                 finally
                 {
                     if (owner)
@@ -1089,7 +1112,6 @@ namespace NuGet.Configuration
                     throw new NuGetConfigurationException(
                         string.Format(Resources.Unknown_Config_Exception, fileName, e.Message), e);
                 }
-
                 finally
                 {
                     if (owner)
