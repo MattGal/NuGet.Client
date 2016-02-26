@@ -50,7 +50,14 @@ namespace NuGet.PackageManagement.VisualStudio
             {
                 root = Path.Combine(SolutionManager.SolutionDirectory, EnvDTEProjectUtility.NuGetSolutionSettingsFolder);
             }
-            SolutionSettings = Configuration.Settings.LoadDefaultSettings(root, configFileName: null, machineWideSettings: MachineWideSettings);
+            try
+            {
+                SolutionSettings = Configuration.Settings.LoadDefaultSettings(root, configFileName: null, machineWideSettings: MachineWideSettings);
+            }
+            catch(Configuration.NuGetConfigurationException ex)
+            {
+                MessageHelper.ShowErrorMessage(ex.Message, Strings.ConfigErrorDialogBoxTitle);
+            }
         }
 
         private void OnSolutionOpenedOrClosed(object sender, EventArgs e)
