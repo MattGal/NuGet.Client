@@ -202,7 +202,7 @@ namespace NuGet.Configuration.Test
                 // Act & Assert
                 var ex = Record.Exception(() => new Settings(mockBaseDirectory));
                 Assert.NotNull(ex);
-                Assert.IsAssignableFrom<XmlException>(ex);
+                Assert.IsAssignableFrom<NuGetConfigurationException>(ex);
             }
         }
 
