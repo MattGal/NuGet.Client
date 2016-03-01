@@ -1033,25 +1033,25 @@ namespace NuGet.Configuration
                 catch (InvalidOperationException e)
                 {
                     throw new NuGetConfigurationException(
-                        string.Format(Resources.ShowError_ConfigInvalidOperation, ConfigFilePath, e.Message), e);
+                        string.Format(CultureInfo.CurrentCulture,Resources.ShowError_ConfigInvalidOperation, ConfigFilePath, e.Message), e);
                 }
 
                 catch (UnauthorizedAccessException e)
                 {
                     throw new NuGetConfigurationException(
-                        string.Format(Resources.ShowError_ConfigUnauthorizedAccess, ConfigFilePath, e.Message), e);
+                        string.Format(CultureInfo.CurrentCulture,Resources.ShowError_ConfigUnauthorizedAccess, ConfigFilePath, e.Message), e);
                 }
 
                 catch (XmlException e)
                 {
                     throw new NuGetConfigurationException(
-                        string.Format(Resources.ShowError_ConfigInvalidXml, ConfigFilePath, e.Message), e);
+                        string.Format(CultureInfo.CurrentCulture,Resources.ShowError_ConfigInvalidXml, ConfigFilePath, e.Message), e);
                 }
 
                 catch (Exception e)
                 {
                     throw new NuGetConfigurationException(
-                        string.Format(Resources.Unknown_Config_Exception, ConfigFilePath, e.Message), e);
+                        string.Format(CultureInfo.CurrentCulture,Resources.Unknown_Config_Exception, ConfigFilePath, e.Message), e);
                 }
                 finally
                 {
@@ -1092,25 +1092,25 @@ namespace NuGet.Configuration
                 catch (InvalidOperationException e)
                 {
                     throw new NuGetConfigurationException(
-                        string.Format(Resources.ShowError_ConfigInvalidOperation, fileName, e.Message), e);
+                        string.Format(CultureInfo.CurrentCulture, Resources.ShowError_ConfigInvalidOperation, fileName, e.Message), e);
                 }
 
                 catch (UnauthorizedAccessException e)
                 {
                     throw new NuGetConfigurationException(
-                        string.Format(Resources.ShowError_ConfigUnauthorizedAccess, fileName, e.Message), e);
+                        string.Format(CultureInfo.CurrentCulture, Resources.ShowError_ConfigUnauthorizedAccess, fileName, e.Message), e);
                 }
 
                 catch (XmlException e)
                 {
                     throw new NuGetConfigurationException(
-                        string.Format(Resources.ShowError_ConfigInvalidXml, fileName, e.Message), e);
+                        string.Format(CultureInfo.CurrentCulture, Resources.ShowError_ConfigInvalidXml, fileName, e.Message), e);
                 }
 
                 catch (Exception e)
                 {
                     throw new NuGetConfigurationException(
-                        string.Format(Resources.Unknown_Config_Exception, fileName, e.Message), e);
+                        string.Format(CultureInfo.CurrentCulture, Resources.Unknown_Config_Exception, fileName, e.Message), e);
                 }
                 finally
                 {

@@ -150,6 +150,12 @@
   <data name="Unknown_Config_Exception" xml:space="preserve">
     <value>Got exception From NuGet.Config, Please check NuGet.Config at '{0}'.</value>
   </data>
+  <data name="UnsupportedDecryptPassword" xml:space="preserve">
+    <value>Decrypt Password For source : '{0}' is unsupported on coreclr, Please use clear text password.</value>
+  </data>
+  <data name="UnsupportedEncryptPassword" xml:space="preserve">
+    <value>Encrypt Password For source : '{0}' is unsupported on coreclr, Please use clear text password.</value>
+  </data>
   <data name="UnsupportedHashAlgorithm" xml:space="preserve">
     <value>Hash algorithm '{0}' is unsupported. Supported algorithms include: SHA512 and SHA256.</value>
   </data>

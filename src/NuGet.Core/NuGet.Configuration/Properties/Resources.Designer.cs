@@ -176,6 +176,22 @@ namespace NuGet.Configuration
             }
         }
 
+        public static string UnsupportedDecryptPassword
+        {
+            get
+            {
+                return GetString("UnsupportedDecryptPassword");
+            }
+        }
+
+        public static string UnsupportedEncryptPassword
+        {
+            get
+            {
+                return GetString("UnsupportedEncryptPassword");
+            }
+        }
+
         /// <summary>
         /// Unable to parse config file '{0}'.
         /// </summary>
