@@ -55,7 +55,7 @@ namespace NuGet.Commands
             }
 
             // True if dir or project.json file
-            var result = (File.Exists(path) && path.EndsWith(".msbuildp2p", StringComparison.OrdinalIgnoreCase));
+            var result = (File.Exists(path) && path.EndsWith(".dg", StringComparison.OrdinalIgnoreCase));
 
             return Task.FromResult(result);
         }
