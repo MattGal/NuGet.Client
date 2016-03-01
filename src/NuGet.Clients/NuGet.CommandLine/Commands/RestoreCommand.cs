@@ -84,28 +84,25 @@ namespace NuGet.CommandLine
             var restoreInputs = DetermineRestoreInputs();
 
             // packages.config
-            if (restoreInputs.PackageReferenceFiles.Count > 0)
+            if (restoreInputs.PackagesConfigFiles.Count > 0)
             {
                 var v2RestoreResult = await PerformNuGetV2RestoreAsync(restoreInputs);
-                restoreSummaries.Add(v2RestoreResult);
+                restoreSummaries.AddRange(v2RestoreResult);
             }
 
             // project.json
             if (restoreInputs.RestoreV3Context.Inputs.Any())
             {
-                // Read the settings outside of parallel loops.
-                ReadSettings(restoreInputs);
-
-                // Check if we can restore based on the nuget.config settings
-                CheckRequireConsent();
-
                 using (var cacheContext = new SourceCacheContext())
                 {
-                    var restoreContext = restoreInputs.RestoreV3Context;
-
                     var providerCache = new RestoreCommandProvidersCache();
 
+                    // Read the settings outside of parallel loops.
+                    var settingsOverrideRoot = SolutionDirectory ?? restoreInputs.SolutionFiles.FirstOrDefault();
+                    ReadSettings(settingsOverrideRoot);
+
                     // Add restore args to the restore context
+                    var restoreContext = restoreInputs.RestoreV3Context;
                     cacheContext.NoCache = NoCache;
                     restoreContext.CacheContext = cacheContext;
                     restoreContext.DisableParallel = DisableParallelProcessing;
@@ -127,7 +124,6 @@ namespace NuGet.CommandLine
                     restoreContext.GlobalPackagesFolder = GetEffectiveGlobalPackagesFolder(
                                         PackagesDirectory,
                                         SolutionDirectory,
-                                        restoreInputs,
                                         globalPackagesFolder);
 
                     // Providers
@@ -155,7 +151,6 @@ namespace NuGet.CommandLine
         private static string GetEffectiveGlobalPackagesFolder(
             string packagesDirectoryParameter,
             string solutionDirectoryParameter,
-            PackageRestoreInputs packageRestoreInputs,
             string globalPackagesFolder)
         {
             // Return the -PackagesDirectory parameter if specified
@@ -169,16 +164,11 @@ namespace NuGet.CommandLine
             {
                 return globalPackagesFolder;
             }
-            else if (!string.IsNullOrEmpty(solutionDirectoryParameter)
-                || packageRestoreInputs.RestoringWithSolutionFile)
+            else if (!string.IsNullOrEmpty(solutionDirectoryParameter))
             {
-                var solutionDirectory = packageRestoreInputs.RestoringWithSolutionFile ?
-                    packageRestoreInputs.DirectoryOfSolutionFile :
-                    solutionDirectoryParameter;
-
                 // -PackagesDirectory parameter was not provided and globalPackagesFolder is a relative path.
                 // Use the solutionDirectory to construct the full path
-                return Path.Combine(solutionDirectory, globalPackagesFolder);
+                return Path.Combine(solutionDirectoryParameter, globalPackagesFolder);
             }
 
             // -PackagesDirectory parameter was not provided and globalPackagesFolder is a relative path.
@@ -201,12 +191,12 @@ namespace NuGet.CommandLine
             return _sourceProvider;
         }
 
-        private void ReadSettings(PackageRestoreInputs packageRestoreInputs)
+        private void ReadSettings(string currentSolutionDirectory)
         {
-            if (!string.IsNullOrEmpty(SolutionDirectory) || packageRestoreInputs.RestoringWithSolutionFile)
+            if (!string.IsNullOrEmpty(SolutionDirectory) || !string.IsNullOrEmpty(currentSolutionDirectory))
             {
-                var solutionDirectory = packageRestoreInputs.RestoringWithSolutionFile ?
-                    packageRestoreInputs.DirectoryOfSolutionFile :
+                var solutionDirectory = !string.IsNullOrEmpty(currentSolutionDirectory) ?
+                    currentSolutionDirectory :
                     SolutionDirectory;
 
                 // Read the solution-level settings
@@ -229,111 +219,144 @@ namespace NuGet.CommandLine
             }
         }
 
-        private async Task<RestoreSummary> PerformNuGetV2RestoreAsync(PackageRestoreInputs packageRestoreInputs)
+        private async Task<List<RestoreSummary>> PerformNuGetV2RestoreAsync(PackageRestoreInputs packageRestoreInputs)
         {
-            ReadSettings(packageRestoreInputs);
-            var packagesFolderPath = GetPackagesFolder(packageRestoreInputs);
+            var summaries = new List<RestoreSummary>();
+            var missingPackages = 0;
 
-            var sourceRepositoryProvider = new CommandLineSourceRepositoryProvider(SourceProvider);
-            var nuGetPackageManager = new NuGetPackageManager(sourceRepositoryProvider, Settings, packagesFolderPath);
+            // Restore for one root directory at a time
+            // This is needed since some of the settings are currently set on the base class.
+            // Settings may share a common root directory, those can be run together.
+            // Null group.Key values indicate no solution file.
+            var groups = packageRestoreInputs.PackagesConfigFiles
+                .GroupBy(solutionInput => solutionInput.RootDirectory, StringComparer.Ordinal)
+                .ToList();
 
-            var installedPackageReferences = new HashSet<Packaging.PackageReference>(new PackageReferenceComparer());
-            if (packageRestoreInputs.RestoringWithSolutionFile)
+            foreach (var group in groups)
             {
-                installedPackageReferences.AddRange(packageRestoreInputs
-                    .PackageReferenceFiles
-                    .SelectMany(file => GetInstalledPackageReferences(file, allowDuplicatePackageIds: true)));
-            }
-            else if (packageRestoreInputs.PackageReferenceFiles.Count > 0)
-            {
-                // By default the PackageReferenceFile does not throw
-                // if the file does not exist at the specified path.
-                // So we'll need to verify that the file exists.
-                Debug.Assert(packageRestoreInputs.PackageReferenceFiles.Count == 1,
-                    "Only one packages.config file is allowed to be specified " +
-                    "at a time when not performing solution restore.");
+                var rootDirectory = group.Key;
 
-                var packageReferenceFile = packageRestoreInputs.PackageReferenceFiles[0];
-                if (!File.Exists(packageReferenceFile))
+                // Apply settings
+                ReadSettings(rootDirectory);
+
+                // Get packages folder relative to the solution, or throw if one cannot be found.
+                var packagesFolderPath = GetPackagesFolder(rootDirectory);
+
+                var sourceRepositoryProvider = new CommandLineSourceRepositoryProvider(SourceProvider);
+                var nuGetPackageManager = new NuGetPackageManager(sourceRepositoryProvider, Settings, packagesFolderPath);
+
+                var installedPackageReferences = new HashSet<Packaging.PackageReference>(new PackageReferenceComparer());
+
+                // Create a look up of references
+                var itemReferences = new Dictionary<SolutionInput, List<Packaging.PackageReference>>();
+
+                foreach (var item in group)
                 {
-                    var message = string.Format(
-                        CultureInfo.CurrentCulture,
-                        LocalizedResourceManager.GetString("RestoreCommandFileNotFound"),
-                        packageReferenceFile);
+                    if (itemReferences.ContainsKey(item))
+                    {
+                        var references = GetInstalledPackageReferences(item.Input, allowDuplicatePackageIds: true) 
+                            .ToList();
 
-                    throw new InvalidOperationException(message);
+                        itemReferences.Add(item, references);
+                    }
                 }
 
-                installedPackageReferences.AddRange(
-                    GetInstalledPackageReferences(packageReferenceFile, allowDuplicatePackageIds: true));
+                // Full list of packages
+                installedPackageReferences.UnionWith(itemReferences.SelectMany(item => item.Value));
+
+                // Missing packages
+                var missingPackageReferences = installedPackageReferences.Where(reference =>
+                    !nuGetPackageManager.PackageExistsInPackagesFolder(reference.PackageIdentity)).ToArray();
+
+                if (missingPackageReferences.Length == 0)
+                {
+                    // No packages to install
+                    summaries.Add(new RestoreSummary(true));
+                    continue;
+                }
+
+                var packageRestoreData = new List<PackageRestoreData>();
+
+                foreach (var reference in missingPackageReferences)
+                {
+                    // Find all items that reference the missing package
+                    var parents = new HashSet<string>();
+
+                    foreach (var pair in itemReferences)
+                    {
+                        if (pair.Value.Equals(reference))
+                        {
+                            parents.Add(pair.Key.Input);
+                        }
+                    }
+
+                    var record = new PackageRestoreData(
+                        reference,
+                        parents,
+                        isMissing: true);
+
+                    packageRestoreData.Add(record);
+                }
+
+                var packageSources = GetPackageSources(Settings);
+
+                var repositories = packageSources
+                    .Select(sourceRepositoryProvider.CreateRepository)
+                    .ToArray();
+
+                var installCount = 0;
+                var failedEvents = new ConcurrentQueue<PackageRestoreFailedEventArgs>();
+
+                var packageRestoreContext = new PackageRestoreContext(
+                    nuGetPackageManager,
+                    packageRestoreData,
+                    CancellationToken.None,
+                    packageRestoredEvent: (sender, args) => { Interlocked.Add(ref installCount, args.Restored ? 1 : 0); },
+                    packageRestoreFailedEvent: (sender, args) => { failedEvents.Enqueue(args); },
+                    sourceRepositories: repositories,
+                    maxNumberOfParallelTasks: DisableParallelProcessing
+                            ? 1
+                            : PackageManagementConstants.DefaultMaxDegreeOfParallelism);
+
+                CheckRequireConsent();
+
+                var collectorLogger = new CollectorLogger(Console);
+                var projectContext = new ConsoleProjectContext(collectorLogger)
+                {
+                    PackageExtractionContext = new PackageExtractionContext()
+                };
+
+                if (EffectivePackageSaveMode != Packaging.PackageSaveMode.None)
+                {
+                    projectContext.PackageExtractionContext.PackageSaveMode = EffectivePackageSaveMode;
+                }
+
+                var result = await PackageRestoreManager.RestoreMissingPackagesAsync(
+                    packageRestoreContext,
+                    projectContext);
+
+                var summary = new RestoreSummary(
+                    result.Restored,
+                    "packages.config projects",
+                    Settings.Priority.Select(x => Path.Combine(x.Root, x.FileName)),
+                    packageSources.Select(x => x.Source),
+                    installCount,
+                    collectorLogger.Errors.Concat(failedEvents.Select(e => e.Exception.Message)));
+
+                summaries.Add(summary);
             }
 
-            var missingPackageReferences = installedPackageReferences.Where(reference =>
-                !nuGetPackageManager.PackageExistsInPackagesFolder(reference.PackageIdentity)).ToArray();
-
-            if (missingPackageReferences.Length == 0)
+            if (missingPackages == 0 && summaries.Count == 0)
             {
                 var message = string.Format(
-                    CultureInfo.CurrentCulture,
-                    LocalizedResourceManager.GetString("InstallCommandNothingToInstall"),
-                    "packages.config");
+                        CultureInfo.CurrentCulture,
+                        LocalizedResourceManager.GetString("InstallCommandNothingToInstall"),
+                        "packages.config");
 
                 Console.LogMinimal(message);
-                return new RestoreSummary(true);
             }
 
-            var packageRestoreData = missingPackageReferences.Select(reference =>
-                new PackageRestoreData(
-                    reference,
-                    new[] { packageRestoreInputs.RestoringWithSolutionFile
-                                ? packageRestoreInputs.DirectoryOfSolutionFile
-                                : packageRestoreInputs.PackageReferenceFiles[0] },
-                    isMissing: true));
-
-            var packageSources = GetPackageSources(Settings);
-
-            var repositories = packageSources
-                .Select(sourceRepositoryProvider.CreateRepository)
-                .ToArray();
-
-            var installCount = 0;
-            var failedEvents = new ConcurrentQueue<PackageRestoreFailedEventArgs>();
-
-            var packageRestoreContext = new PackageRestoreContext(
-                nuGetPackageManager,
-                packageRestoreData,
-                CancellationToken.None,
-                packageRestoredEvent: (sender, args) => { Interlocked.Add(ref installCount, args.Restored ? 1 : 0); },
-                packageRestoreFailedEvent: (sender, args) => { failedEvents.Enqueue(args); },
-                sourceRepositories: repositories,
-                maxNumberOfParallelTasks: DisableParallelProcessing
-                        ? 1
-                        : PackageManagementConstants.DefaultMaxDegreeOfParallelism);
-
-            CheckRequireConsent();
-
-            var collectorLogger = new CollectorLogger(Console);
-            var projectContext = new ConsoleProjectContext(collectorLogger)
-            {
-                PackageExtractionContext = new PackageExtractionContext()
-            };
-
-            if (EffectivePackageSaveMode != Packaging.PackageSaveMode.None)
-            {
-                projectContext.PackageExtractionContext.PackageSaveMode = EffectivePackageSaveMode;
-            }
-
-            var result = await PackageRestoreManager.RestoreMissingPackagesAsync(
-                packageRestoreContext,
-                projectContext);
-
-            return new RestoreSummary(
-                result.Restored,
-                "packages.config projects",
-                Settings.Priority.Select(x => Path.Combine(x.Root, x.FileName)),
-                packageSources.Select(x => x.Source),
-                installCount,
-                collectorLogger.Errors.Concat(failedEvents.Select(e => e.Exception.Message)));
+            return summaries;
         }
 
         private void CheckRequireConsent()
@@ -363,139 +386,49 @@ namespace NuGet.CommandLine
             }
         }
 
+        /// <summary>
+        /// Discover all restore inputs, this checks for both v2 and v3
+        /// </summary>
         private PackageRestoreInputs DetermineRestoreInputs()
         {
             var packageRestoreInputs = new PackageRestoreInputs();
 
             if (Arguments.Count == 0)
             {
-                // look for solution files first
-                var solutionFileFullPath = GetSolutionFile(Directory.GetCurrentDirectory());
-                if (solutionFileFullPath != null)
-                {
-                    if (Verbosity == Verbosity.Detailed)
-                    {
-                        Console.WriteLine(
-                            LocalizedResourceManager.GetString("RestoreCommandRestoringPackagesForSolution"),
-                            solutionFileFullPath);
-                    }
-
-                    ProcessSolutionFile(solutionFileFullPath, packageRestoreInputs);
-                }
-                else if (File.Exists(Constants.PackageReferenceFile)) // look for packages.config file
-                {
-                    var packagesConfigFileFullPath = Path.GetFullPath(Constants.PackageReferenceFile);
-                    if (Verbosity == Verbosity.Detailed)
-                    {
-                        Console.WriteLine(
-                            LocalizedResourceManager.GetString(
-                                "RestoreCommandRestoringPackagesFromPackagesConfigFile"));
-                    }
-
-                    packageRestoreInputs.PackageReferenceFiles.Add(packagesConfigFileFullPath);
-                }
-                else if (Directory.GetFiles(
-                    Directory.GetCurrentDirectory(),
-                    $"*{ProjectJsonPathUtilities.ProjectConfigFileName}",
-                    SearchOption.AllDirectories).Length > 0)
-                {
-                    // V3 recursive project.json search
-                    packageRestoreInputs.RestoreV3Context.Inputs.Add(Directory.GetCurrentDirectory());
-                }
-                else
-                {
-                    throw new InvalidOperationException(
-                        LocalizedResourceManager.GetString(
-                            "Error_NoSolutionFileNorePackagesConfigFile"));
-                }
+                // If no arguments were provided use the current directory
+                GetInputsFromDirectory(Directory.GetCurrentDirectory(), packageRestoreInputs);
             }
             else
             {
+                // Restore takes multiple arguments, each could be a file or directory
                 foreach (var argument in Arguments)
                 {
-                    // An argument was passed in. It might be a solution file or directory,
-                    // project file, project.json, or packages.config file
+                    var fullPath = Path.GetFullPath(argument);
 
-                    var projectFilePath = Path.GetFullPath(argument);
-                    var projectFileName = Path.GetFileName(projectFilePath);
-
-                    if (ProjectJsonPathUtilities.IsProjectConfig(projectFileName))
+                    if (Directory.Exists(fullPath))
                     {
-                        if (File.Exists(projectFilePath))
-                        {
-                            // project.json or projName.project.json
-                            packageRestoreInputs.RestoreV3Context.Inputs.Add(projectFilePath);
-                        }
-                        else
-                        {
-                            var message = string.Format(
-                                CultureInfo.CurrentCulture,
-                                LocalizedResourceManager.GetString("RestoreCommandFileNotFound"),
-                                projectFilePath);
-
-                            throw new InvalidOperationException(message);
-                        }
+                        // Dir
+                        GetInputsFromDirectory(fullPath, packageRestoreInputs);
                     }
-                    else if (string.Equals(projectFileName, Constants.PackageReferenceFile)
-                        || (projectFileName.StartsWith("packages.", StringComparison.OrdinalIgnoreCase)
-                        && string.Equals(
-                            Path.GetExtension(projectFileName),
-                            Path.GetExtension(Constants.PackageReferenceFile), StringComparison.OrdinalIgnoreCase)))
+                    else if (File.Exists(fullPath))
                     {
-                        // restoring from packages.config or packages.projectname.config file
-                        packageRestoreInputs.PackageReferenceFiles.Add(projectFilePath);
-                    }
-                    else if (MsBuildUtility.IsMsBuildBasedProject(projectFileName))
-                    {
-                        if (!File.Exists(projectFilePath))
-                        {
-                            var message = string.Format(
-                                CultureInfo.CurrentCulture,
-                                LocalizedResourceManager.GetString("RestoreCommandFileNotFound"),
-                                projectFilePath);
-
-                            throw new InvalidOperationException(message);
-                        }
-
-                        // For msbuild files find the project.json or packages.config file,
-                        // if neither exist skip it
-
-                        var projectName = Path.GetFileNameWithoutExtension(projectFileName);
-                        var dir = Path.GetDirectoryName(projectFilePath);
-
-                        var projectJsonPath = ProjectJsonPathUtilities.GetProjectConfigPath(dir, projectName);
-                        var packagesConfigPath = GetPackageReferenceFile(projectFilePath);
-
-                        // Check for project.json
-                        if (File.Exists(projectJsonPath))
-                        {
-                            packageRestoreInputs.RestoreV3Context.Inputs.Add(projectFilePath);
-                        }
-                        else if (File.Exists(packagesConfigPath))
-                        {
-                            // Check for packages.config
-                            packageRestoreInputs.PackageReferenceFiles.Add(packagesConfigPath);
-                        }
-                    }
-                    else if (projectFileName.EndsWith(".msbuildp2p", StringComparison.OrdinalIgnoreCase))
-                    {
-                        packageRestoreInputs.RestoreV3Context.Inputs.Add(projectFileName);
+                        // File
+                        GetInputsFromFile(fullPath, packageRestoreInputs);
                     }
                     else
                     {
-                        // Check if it is a solution file
-                        var solutionFileFullPath = GetSolutionFile(projectFilePath);
-                        if (solutionFileFullPath == null)
-                        {
-                            throw new InvalidOperationException(
-                                LocalizedResourceManager.GetString("Error_CannotLocateSolutionFile"));
-                        }
+                        // Not found
+                        var message = string.Format(
+                            CultureInfo.CurrentCulture,
+                            LocalizedResourceManager.GetString("RestoreCommandFileNotFound"),
+                            argument);
 
-                        ProcessSolutionFile(solutionFileFullPath, packageRestoreInputs);
+                        throw new InvalidOperationException(message);
                     }
                 }
             }
 
+            // Find P2P graph for v3 inputs.
             var projectsWithPotentialP2PReferences = packageRestoreInputs.RestoreV3Context.Inputs
                 .Where(MsBuildUtility.IsMsBuildBasedProject)
                 .ToArray();
@@ -516,6 +449,7 @@ namespace NuGet.CommandLine
 
                 Console.LogVerbose($"MSBuild P2P timeout [ms]: {scaleTimeout}");
 
+                // Call MSBuild to resolve P2P references.
                 var referencesLookup = MsBuildUtility.GetProjectReferences(
                     _msbuildDirectory,
                     projectsWithPotentialP2PReferences,
@@ -527,60 +461,159 @@ namespace NuGet.CommandLine
             return packageRestoreInputs;
         }
 
-        private static bool IsSolutionOrProjectFile(string fileName)
+        /// <summary>
+        /// Determine if a file is v2 or v3
+        /// </summary>
+        private void GetInputsFromFile(string projectFilePath, PackageRestoreInputs packageRestoreInputs)
         {
-            if (!String.IsNullOrEmpty(fileName))
+            // An argument was passed in. It might be a solution file or directory,
+            // project file, project.json, or packages.config file
+            var projectFileName = Path.GetFileName(projectFilePath);
+
+            if (ProjectJsonPathUtilities.IsProjectConfig(projectFileName))
             {
-                var extension = Path.GetExtension(fileName);
-                var lastFourCharacters = string.Empty;
-                var length = extension.Length;
-
-                if (length >= 4)
-                {
-                    lastFourCharacters = extension.Substring(length - 4);
-                }
-
-                return (string.Equals(extension, ".sln", StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(lastFourCharacters, "proj", StringComparison.OrdinalIgnoreCase));
+                // project.json or projName.project.json
+                packageRestoreInputs.RestoreV3Context.Inputs.Add(projectFilePath);
             }
-            return false;
+            else if (IsPackagesConfig(projectFileName))
+            {
+                // restoring from packages.config or packages.projectname.config file
+                packageRestoreInputs.PackagesConfigFiles.Add(
+                        new SolutionInput(solutionFile: null, input: projectFilePath));
+            }
+            else if (projectFileName.EndsWith("proj", StringComparison.OrdinalIgnoreCase))
+            {
+                // For msbuild files find the project.json or packages.config file,
+                // if neither exist skip it
+                var projectName = Path.GetFileNameWithoutExtension(projectFileName);
+                var dir = Path.GetDirectoryName(projectFilePath);
+
+                var projectJsonPath = ProjectJsonPathUtilities.GetProjectConfigPath(dir, projectName);
+                var packagesConfigPath = GetPackageReferenceFile(projectFilePath);
+
+                // Check for project.json
+                if (File.Exists(projectJsonPath))
+                {
+                    if (MsBuildUtility.IsMsBuildBasedProject(projectFilePath))
+                    {
+                        // Add the project file path if it allows p2ps
+                        packageRestoreInputs.RestoreV3Context.Inputs.Add(projectFilePath);
+                    }
+                    else
+                    {
+                        // Unknown project type, add the project.json by itself
+                        packageRestoreInputs.RestoreV3Context.Inputs.Add(projectJsonPath);
+                    }
+                }
+                else if (File.Exists(packagesConfigPath))
+                {
+                    // Check for packages.config, if it exists add it directly
+                    packageRestoreInputs.PackagesConfigFiles.Add(
+                        new SolutionInput(solutionFile: null, input: packagesConfigPath));
+                }
+            }
+            else if (projectFileName.EndsWith(".dg", StringComparison.OrdinalIgnoreCase))
+            {
+                packageRestoreInputs.RestoreV3Context.Inputs.Add(projectFilePath);
+            }
+            else if (projectFileName.EndsWith(".sln", StringComparison.OrdinalIgnoreCase))
+            {
+                ProcessSolutionFile(projectFilePath, packageRestoreInputs);
+            }
         }
 
         /// <summary>
-        /// Gets the solution file, in full path format. If <paramref name="solutionFileOrDirectory"/> is a file,
-        /// that file is returned. Otherwise, searches for a *.sln file in
-        /// directory <paramref name="solutionFileOrDirectory"/>. If exactly one sln file is found,
-        /// that file is returned. If multiple sln files are found, an exception is thrown.
-        /// If no sln files are found, returns null.
+        /// Search a directory for v2 or v3 inputs, only the first type is taken.
         /// </summary>
-        /// <param name="solutionFileOrDirectory">The solution file or directory to search for solution files.</param>
-        /// <returns>The full path of the solution file. Or null if no solution file can be found.</returns>
-        private string GetSolutionFile(string solutionFileOrDirectory)
+        private void GetInputsFromDirectory(string directory, PackageRestoreInputs packageRestoreInputs)
         {
-            //Check if the string passed is a file
-            //If it is a file, then check if it a solution or project file
-            //For other file types and directories it will fall out of these checks and fail later for invalid inputs
-            if (File.Exists(solutionFileOrDirectory) && IsSolutionOrProjectFile(solutionFileOrDirectory))
+            var topLevelFiles = Directory.GetFiles(directory, "*.*", SearchOption.TopDirectoryOnly);
+
+            //  Solution files
+            var solutionFiles = topLevelFiles.Where(file =>
+                file.EndsWith(".sln", StringComparison.OrdinalIgnoreCase))
+                    .ToArray();
+
+            if (solutionFiles.Length > 0)
             {
-                return Path.GetFullPath(solutionFileOrDirectory);
+                foreach (var file in solutionFiles)
+                {
+                    if (Verbosity == Verbosity.Detailed)
+                    {
+                        var message = string.Format(CultureInfo.CurrentCulture,
+                            LocalizedResourceManager.GetString("FoundRestoreInput"),
+                            file);
+
+                        Console.WriteLine(message);
+                    }
+
+                    ProcessSolutionFile(file, packageRestoreInputs);
+                }
+
+                return;
             }
 
-            // look for solution files
-            var slnFiles = Directory.GetFiles(solutionFileOrDirectory, "*.sln");
-            if (slnFiles.Length > 1)
+            // Packages.config
+            var packagesConfigFiles = topLevelFiles.Where(file =>
+                IsPackagesConfig(Path.GetFileName(file)))
+                    .ToArray();
+
+            if (packagesConfigFiles.Length > 0)
             {
-                throw new InvalidOperationException(LocalizedResourceManager.GetString("Error_MultipleSolutions"));
+                foreach (var file in packagesConfigFiles)
+                {
+                    if (Verbosity == Verbosity.Detailed)
+                    {
+                        var message = string.Format(CultureInfo.CurrentCulture,
+                        LocalizedResourceManager.GetString("FoundRestoreInput"),
+                        file);
+
+                        Console.WriteLine(message);
+                    }
+
+                    // packages.confg with no solution file
+                    packageRestoreInputs.PackagesConfigFiles.Add(
+                        new SolutionInput(solutionFile: null, input: file));
+                }
+
+                return;
             }
 
-            if (slnFiles.Length == 1)
+            // Project.json is any directory
+            if (Directory.GetFiles(
+                directory,
+                $"*{ProjectJsonPathUtilities.ProjectConfigFileName}",
+                SearchOption.AllDirectories).Length > 0)
             {
-                return Path.GetFullPath(slnFiles[0]);
+                // V3 recursive project.json search
+                packageRestoreInputs.RestoreV3Context.Inputs.Add(directory);
+
+                return;
             }
 
-            return null;
+            // The directory did not contain a valid target, fail!
+            var noInputs = string.Format(
+                CultureInfo.CurrentCulture,
+                    LocalizedResourceManager.GetString(
+                    "Error_UnableToLocateRestoreTarget"),
+                    directory);
+
+            throw new InvalidOperationException(noInputs);
         }
 
-        private string GetPackagesFolder(PackageRestoreInputs packageRestoreInputs)
+        /// <summary>
+        /// True if the filename is a packages.config file
+        /// </summary>
+        private static bool IsPackagesConfig(string projectFileName)
+        {
+            return string.Equals(projectFileName, Constants.PackageReferenceFile)
+                || (projectFileName.StartsWith("packages.", StringComparison.OrdinalIgnoreCase)
+                && string.Equals(
+                    Path.GetExtension(projectFileName),
+                    Path.GetExtension(Constants.PackageReferenceFile), StringComparison.OrdinalIgnoreCase));
+        }
+
+        private string GetPackagesFolder(string solutionDirectory)
         {
             if (!string.IsNullOrEmpty(PackagesDirectory))
             {
@@ -598,10 +631,10 @@ namespace NuGet.CommandLine
                 return Path.Combine(SolutionDirectory, CommandLineConstants.PackagesDirectoryName);
             }
 
-            if (packageRestoreInputs.RestoringWithSolutionFile)
+            if (solutionDirectory != null)
             {
                 return Path.Combine(
-                    packageRestoreInputs.DirectoryOfSolutionFile,
+                    solutionDirectory,
                     CommandLineConstants.PackagesDirectoryName);
             }
 
@@ -635,17 +668,20 @@ namespace NuGet.CommandLine
 
         private void ProcessSolutionFile(string solutionFileFullPath, PackageRestoreInputs restoreInputs)
         {
-            restoreInputs.DirectoryOfSolutionFile = Path.GetDirectoryName(solutionFileFullPath);
+            var solutionDirectory = Path.GetDirectoryName(solutionFileFullPath);
+
+            restoreInputs.SolutionFiles.Add(solutionFileFullPath);
 
             // restore packages for the solution
             var solutionLevelPackagesConfig = Path.Combine(
-                restoreInputs.DirectoryOfSolutionFile,
+                solutionDirectory,
                 NuGetConstants.NuGetSolutionSettingsFolder,
                 Constants.PackageReferenceFile);
 
             if (File.Exists(solutionLevelPackagesConfig))
             {
-                restoreInputs.PackageReferenceFiles.Add(solutionLevelPackagesConfig);
+                restoreInputs.PackagesConfigFiles.Add(
+                    new SolutionInput(solutionFileFullPath, solutionLevelPackagesConfig));
             }
 
             var projectFiles = MsBuildUtility.GetAllProjectFileNames(solutionFileFullPath, _msbuildDirectory);
@@ -667,6 +703,9 @@ namespace NuGet.CommandLine
                 // project.json overrides packages.config
                 if (File.Exists(projectJsonPath))
                 {
+                    // project.json inputs are resolved again against the p2p file
+                    // and are matched with the solution there
+
                     // For known msbuild project types use the project
                     if (MsBuildUtility.IsMsBuildBasedProject(projectFile))
                     {
@@ -680,7 +719,8 @@ namespace NuGet.CommandLine
                 }
                 else if (File.Exists(packagesConfigFilePath))
                 {
-                    restoreInputs.PackageReferenceFiles.Add(packagesConfigFilePath);
+                    restoreInputs.PackagesConfigFiles.Add(
+                        new SolutionInput(solutionFileFullPath, packagesConfigFilePath));
                 }
             }
         }
@@ -692,15 +732,42 @@ namespace NuGet.CommandLine
                 ProjectReferenceLookup = new MSBuildProjectReferenceProvider(Enumerable.Empty<string>());
             }
 
-            public bool RestoringWithSolutionFile => !string.IsNullOrEmpty(DirectoryOfSolutionFile);
-
-            public string DirectoryOfSolutionFile { get; set; }
-
-            public List<string> PackageReferenceFiles { get; } = new List<string>();
+            public List<SolutionInput> PackagesConfigFiles { get; } = new List<SolutionInput>();
 
             public MSBuildProjectReferenceProvider ProjectReferenceLookup { get; set; }
 
             public RestoreArgs RestoreV3Context { get; set; } = new RestoreArgs();
+
+            public HashSet<string> SolutionFiles { get; } = new HashSet<string>();
+        }
+
+        private class SolutionInput
+        {
+            public string SolutionFile { get; }
+
+            public string Input { get; }
+
+            public SolutionInput(string solutionFile, string input)
+            {
+                SolutionFile = solutionFile;
+                Input = input;
+            }
+
+            /// <summary>
+            /// Root of the solution OR the input if the solution is null.
+            /// </summary>
+            public string RootDirectory
+            {
+                get
+                {
+                    if (!string.IsNullOrEmpty(SolutionFile))
+                    {
+                        return Path.GetDirectoryName(SolutionFile);
+                    }
+
+                    return Path.GetDirectoryName(Input);
+                }
+            }
         }
     }
 }

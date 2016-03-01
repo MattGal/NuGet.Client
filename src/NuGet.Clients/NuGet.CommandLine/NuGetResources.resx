@@ -6112,4 +6112,10 @@ Oluşturma sırasında NuGet'in paketleri indirmesini önlemek için, Visual Stu
   <data name="Error_MissingSourceParameter" xml:space="preserve">
     <value>Source parameter was not specified.</value>
   </data>
+  <data name="Error_UnableToLocateRestoreTarget" xml:space="preserve">
+    <value>Unable to locate a restore target in '{0}'.</value>
+  </data>
+  <data name="FoundRestoreInput" xml:space="preserve">
+    <value>Found restore input '{0}'.</value>
+  </data>
 </root>

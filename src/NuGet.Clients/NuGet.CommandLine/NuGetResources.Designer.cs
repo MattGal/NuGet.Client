@@ -3436,6 +3436,15 @@ namespace NuGet.CommandLine {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Unable to locate a restore target in &apos;{0}&apos;..
+        /// </summary>
+        public static string Error_UnableToLocateRestoreTarget {
+            get {
+                return ResourceManager.GetString("Error_UnableToLocateRestoreTarget", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to This version of msbuild is not supported: &apos;{0}&apos;.
         /// </summary>
         public static string Error_UnsupportedMsbuild {
@@ -4089,6 +4098,15 @@ namespace NuGet.CommandLine {
         public static string FoundProjects_trk {
             get {
                 return ResourceManager.GetString("FoundProjects_trk", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Found restore input &apos;{0}&apos;..
+        /// </summary>
+        public static string FoundRestoreInput {
+            get {
+                return ResourceManager.GetString("FoundRestoreInput", resourceCulture);
             }
         }
         
