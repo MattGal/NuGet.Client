@@ -61,7 +61,7 @@ namespace NuGet.CommandLine
         }
 
         // The directory that contains msbuild
-        private string _msbuildDirectory;
+        private Lazy<string> _msbuildDirectory;
 
         public override async Task ExecuteCommandAsync()
         {
@@ -69,7 +69,7 @@ namespace NuGet.CommandLine
 
             var restoreSummaries = new List<RestoreSummary>();
 
-            _msbuildDirectory = MsBuildUtility.GetMsbuildDirectory(MSBuildVersion, Console);
+            _msbuildDirectory = new Lazy<string>(() => MsBuildUtility.GetMsbuildDirectory(MSBuildVersion, Console));
 
             if (!string.IsNullOrEmpty(PackagesDirectory))
             {
@@ -426,7 +426,7 @@ namespace NuGet.CommandLine
 
                 // Call MSBuild to resolve P2P references.
                 var referencesLookup = MsBuildUtility.GetProjectReferences(
-                    _msbuildDirectory,
+                    _msbuildDirectory.Value,
                     projectsWithPotentialP2PReferences,
                     scaleTimeout);
 
@@ -701,7 +701,7 @@ namespace NuGet.CommandLine
                 restoreInputs.PackagesConfigFiles.Add(solutionLevelPackagesConfig);
             }
 
-            var projectFiles = MsBuildUtility.GetAllProjectFileNames(solutionFileFullPath, _msbuildDirectory);
+            var projectFiles = MsBuildUtility.GetAllProjectFileNames(solutionFileFullPath, _msbuildDirectory.Value);
             foreach (var projectFile in projectFiles)
             {
                 if (!File.Exists(projectFile))
